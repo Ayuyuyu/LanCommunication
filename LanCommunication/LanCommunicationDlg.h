@@ -39,36 +39,39 @@ protected:
 	afx_msg LRESULT OnMsgUdpSendMsg(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnMsgUdpClose(WPARAM wParam, LPARAM lParam);
 	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
-
+	afx_msg LRESULT OnMsgButtonSendFilename(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnMsgUdpFileinfoSend(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnMsgTcpFileSend(WPARAM wParam, LPARAM lParam);
+	afx_msg void OnClickListOnlinelist(NMHDR *pNMHDR, LRESULT *pResult);
 	DECLARE_MESSAGE_MAP()
 public:
 	virtual BOOL OnNotify(WPARAM wParam, LPARAM lParam, LRESULT* pResult);
 public:
 	CListCtrl m_listctrl_online;
 	CMyEdit m_myedit;
+	CButton m_ButtinFileName;
 	int nList;
 public:
 	void OnInitControls();		//初始化控件
 	void OnInitParam();			//初始化其他参数
 
+	static unsigned int __stdcall FileSendThread(void* param);
+
 protected:
 	//CLanCommunicationRecvDLG *pLanCommunicationRecvDLG;
-	std::set<std::string> set_addrip;
+	std::set<std::string> set_addrip;						//保存连接来的IP
 	std::set<std::string>::iterator set_iter;  
-	std::vector<std::string> vec_file;					//发送文件的vector
-	std::vector<std::string> vec_file_recv;			//收到文件的vector
+	std::vector<std::string> vec_file;						//发送文件的vector
+	std::vector<std::string> vec_send_file;				//保存下  发送文件的vector 一会删
+	std::vector<std::string> vec_file_recv;				//收到文件的vector  给入RecvDLG
 	BOOL bfile;
 	//std::set<CString> ::iterator set_file_iter;
 	CFont fontEdit,fontTitle,fontPort;
 	CBrush brushEdit,brushTitle,brushPort;
 
 public:
+	std::string strIP;													//请求的IP  发送到的
 
-	CButton m_ButtinFileName;
-protected:
-	afx_msg LRESULT OnMsgButtonSendFilename(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnMsgUdpFileinfoSend(WPARAM wParam, LPARAM lParam);
-public:
-	afx_msg void OnClickListOnlinelist(NMHDR *pNMHDR, LRESULT *pResult);
+	afx_msg void OnBnClickedButton2();
 };
 //extern CLanCommunicationDlg *pLanCommunicationDlg;

@@ -1,6 +1,8 @@
 #include "StdAfx.h"
 #include "EventSocket.h"
 #include "LanDefine.h"
+#include "LanGetLocalSystemInfo.h"
+#include "base64.h"
 //
 
 CEventSocket::CEventSocket(void)
@@ -9,6 +11,8 @@ CEventSocket::CEventSocket(void)
 	m_hThread    = NULL;
 	m_bEventStop = false;
 	EventTotal = 0;
+	recv_filesize = 0;
+	filesize = 0;
 }
 
 
@@ -221,13 +225,13 @@ int CEventSocket::OnFileRecv(int nErrorCode,DWORD Event)
 	return int_ret;
 }
 
+//处理所有MSG收发
 void CEventSocket::OnReceive( int nErrorCode,DWORD Event,SOCKET socket )
 {
 	LPSOCKET_INFORMATION SocketInfo = SocketArray[Event - WSA_WAIT_EVENT_0];
 	DWORD Flags = 0;
 	DWORD RecvBytes=0;
-	FILE* fp;
-	fp = fopen("test.txt","a+");
+
 
 	SocketInfo->DataBuf.buf = SocketInfo->Buffer;
 	SocketInfo->DataBuf.len = DATA_BUFSIZE;
@@ -247,7 +251,8 @@ void CEventSocket::OnReceive( int nErrorCode,DWORD Event,SOCKET socket )
 	else  
 	{
 		SocketInfo->BytesRECV = 0;
-		//UDP 新增
+		
+		//接收：UDP 新增上线
 		if (strstr(SocketInfo->DataBuf.buf,UDP_MSG_ADD_USER))
 		{
 			udp_hostinfo hs;
@@ -255,7 +260,7 @@ void CEventSocket::OnReceive( int nErrorCode,DWORD Event,SOCKET socket )
 			char* recvbuf = SocketInfo->DataBuf.buf;
 			Json::Reader Jread;
 			Json::Value Jmsg;
-			 if(Jread.parse(recvbuf,Jmsg) < 0)
+			 if(!Jread.parse(recvbuf,Jmsg))
 			 {
 				 throw __T("json解析错误");
 				 AfxMessageBox(__T("json"));
@@ -267,7 +272,8 @@ void CEventSocket::OnReceive( int nErrorCode,DWORD Event,SOCKET socket )
 
 			func_LanMsgSendToDlg(MSG_UDP_ADD_USER,&hs);
 		}
-		//UDP 消息
+			
+		//接收：UDP 消息
 		else if (strstr(SocketInfo->DataBuf.buf,UDP_MSG_SEND))
 		{
 			//char szRecvMsg[MAX_PATH*10] = {0};
@@ -275,50 +281,65 @@ void CEventSocket::OnReceive( int nErrorCode,DWORD Event,SOCKET socket )
 			Json::Reader Jread;
 			Json::Value Jmsg;
 			Json::FastWriter write;
-			if(Jread.parse(recvbuf,Jmsg) < 0)
+			if(!Jread.parse(recvbuf,Jmsg))
 			{
 				throw __T("json解析错误");
 				AfxMessageBox(__T("json"));
 			}
-			Jmsg["ip"] = inet_ntoa(pAddr.sin_addr);
-			std::string ipmsg= write.write(Jmsg);
-			//sscanf(recvbuf+strlen(UDP_MSG_SEND),"%[^#]#",szRecvMsg);
-			func_LanMsgSendToDlg(MSG_UDP_SEND_MSG,ipmsg.c_str());
+			//判断是不是本IP发出
+			CLanGetLocalSystemInfo m_local;
+			CString IP = m_local.getHostIP();
+
+			std::string strip = inet_ntoa(pAddr.sin_addr);
+			Jmsg["ip"] = strip;
+			if(IP.CompareNoCase(CA2W(strip.c_str())) != 0)
+			{
+				std::string ipmsg= write.write(Jmsg);
+				//sscanf(recvbuf+strlen(UDP_MSG_SEND),"%[^#]#",szRecvMsg);
+				func_LanMsgSendToDlg(MSG_UDP_SEND_MSG,ipmsg.c_str());
+			}
 
 		}
+		// 接收：UDP 消息 带文件信息发送
 		else if(strstr(SocketInfo->DataBuf.buf,UDP_MSG_FILEINFO_SEND))
 		{
 			char* recvbuf = SocketInfo->DataBuf.buf;
 			Json::Reader Jread;
 			Json::Value Jmsg;
 			Json::FastWriter write;
-			if(Jread.parse(recvbuf,Jmsg) < 0)
+			if(!Jread.parse(recvbuf,Jmsg))
 			{
 				throw __T("json解析错误");
 				AfxMessageBox(__T("json"));
 			}
-			//接收消息的IP
-			Jmsg["ip"] = inet_ntoa(pAddr.sin_addr);
-			//Jmsg["port"] = pAddr.sin_port;
-			std::string ipmsg= write.write(Jmsg);
-		//	sscanf(recvbuf+strlen(UDP_MSG_FILEINFO_SEND),"%[^#]#%[^#]",szFileMsg,szRecvMsg);
-			func_LanMsgSendToDlg(MSG_UDP_FILEINFO_SEND,ipmsg.c_str());  //这个自己转
+			//判断是不是本IP发出
+			CLanGetLocalSystemInfo m_local;
+			CString IP = m_local.getHostIP();
+			std::string strip = inet_ntoa(pAddr.sin_addr);
+			Jmsg["ip"] = strip;
+			if(IP.CompareNoCase(CA2W(strip.c_str())) != 0)
+			{
+				std::string ipmsg= write.write(Jmsg);
+				//	sscanf(recvbuf+strlen(UDP_MSG_FILEINFO_SEND),"%[^#]#%[^#]",szFileMsg,szRecvMsg);
+				func_LanMsgSendToDlg(MSG_UDP_FILEINFO_SEND,ipmsg.c_str());  //这个自己转
+			}
 		}
-		//UDP 退出
+		//接收：UDP 退出
 		else if (strstr(SocketInfo->DataBuf.buf,UDP_MSG_CLOSE))
 		{
 			func_LanMsgSendToDlg(MSG_UDP_CLOSE,inet_ntoa(pAddr.sin_addr));
 			//func_LanMsgSendToDlg(MSG_UDP_SEND_MSG,SocketInfo->DataBuf.buf);
 		}
-		//TCP 准备接收文件
+		//：TCP 准备接收文件  
+		//由文件接收端发来，告诉文件发送端可以发送文件
 		else if (strstr(SocketInfo->DataBuf.buf,TCP_MSG_READY_RECV_FILE))
 		{
 			//准备接受
-			//CString str(SocketInfo->DataBuf.buf);
-			//AfxMessageBox(str);
+			CString str(SocketInfo->DataBuf.buf);
+			AfxMessageBox(str);
 			Json::Reader Jread;
 			Json::Value Jmsg;
-			if(Jread.parse(SocketInfo->DataBuf.buf,Jmsg) < 0)
+			if(!Jread.parse(SocketInfo->DataBuf.buf,Jmsg))
 			{
 				throw __T("json解析错误");
 				AfxMessageBox(__T("json"));
@@ -326,27 +347,72 @@ void CEventSocket::OnReceive( int nErrorCode,DWORD Event,SOCKET socket )
 			func_LanMsgSendToDlg(MSG_TCP_FILE_SEND,Jmsg["ip"].asString().c_str());
 
 		}
-		//s_accept OnAccept得到的
+		//文件接收端用来接收文件信息的
+		//s_accept OnAccept得到的，给予文件发送端 收到反馈
 		else if(strstr(SocketInfo->DataBuf.buf,TCP_MSG_FILE_SEND_REQUEST))
 		{
 			//Send("test",4);
+			Json::Reader Jread;
+			Json::Value Jmsg;
+			if(!Jread.parse(SocketInfo->DataBuf.buf,Jmsg))
+			{
+				throw __T("json解析错误");
+				AfxMessageBox(__T("json"));
+			}
+			filesize =Jmsg["filesize"].asInt64();
+			//recv_filesize = 0;
 			func_LanMsgSendToDlg(MSG_TCP_FILEINFO_RECV,SocketInfo->DataBuf.buf);
+
 			if (socket != NULL)
 			{
 				::send(socket,"test",4,0);
 			}
 
 		}
+		//文件接收端用来接收文件信息的
 		else// if(strstr(SocketInfo->DataBuf.buf,TCP_MSG_SENDING_FILE))
 		{
 			//接收到  给反馈
-			fwrite(SocketInfo->DataBuf.buf,1,strlen(SocketInfo->DataBuf.buf),fp);
-			fclose(fp);
-			func_LanMsgSendToDlg(MSG_TCP_FILE_RECV,SocketInfo->DataBuf.buf);
-			if (socket != NULL)
+			//FILE* fp = fopen("recv.txt","a+");
+			//fwrite(SocketInfo->DataBuf.buf,1,strlen(SocketInfo->DataBuf.buf),fp);
+			//fclose(fp);
+			Json::Reader Jread;
+			Json::Value Jmsg;
+			string tim = SocketInfo->DataBuf.buf;
+			if ( !Jread.parse(tim.c_str(),Jmsg) || recvbuf.length() < DATA_BUFSIZE )
 			{
-				::send(socket,"test",4,0);
+				recvbuf+= SocketInfo->DataBuf.buf;
+				int j = Jread.parse(recvbuf.c_str(),Jmsg);
+				if (Jread.parse(recvbuf.c_str(),Jmsg))
+				{
+					func_LanMsgSendToDlg(MSG_TCP_FILE_RECV,recvbuf.c_str());
+					if (socket != NULL)
+					{
+						::send(socket,"test",4,0);
+					}
+					recvbuf.clear();
+				}
 			}
+			//else if(strstr(SocketInfo->DataBuf.buf,"finish"))
+			//{	
+			//	//std::string strRecvBuf = base64_decode(Jmsg["buf"].asString());
+			//	//recv_filesize+=strRecvBuf.length();
+			//	func_LanMsgSendToDlg(MSG_TCP_FILE_RECV,SocketInfo->DataBuf.buf);
+			//	if (socket != NULL)
+			//	{
+			//		::send(socket,"test",4,0);
+			//	}
+
+			//}
+			//else
+			//{
+			//	func_LanMsgSendToDlg(MSG_TCP_FILE_RECV,SocketInfo->DataBuf.buf);
+			//	if (socket != NULL)
+			//	{
+			//		::send(socket,"test",4,0);
+			//	}
+
+			//}
 		}
 	
 		memset(SocketInfo->Buffer,0,DATA_BUFSIZE);

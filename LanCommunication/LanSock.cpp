@@ -180,7 +180,7 @@ long CLanSock::LanSockGetHandle(HANDLE handleMain,HANDLE handleRecv)
 	消息格式
 	{
 	"type":"UDP_MSG_ADD_USER",
-	"computername":"WINDOWX-123",
+	"computername":"WINDOWS-123",
 	"username":"ADMINITORTER"
 	}
 */
@@ -315,10 +315,12 @@ long CLanSock::LanSockUDP_MSG_FILEINFO_SEND(std::vector<std::string> vec_file,vo
 
 
 /************************************************************************/
-/* 发送 TCP 准备接受文件信息
+/* 发送 TCP 准备接受文件信息   
+RecvDLG 点击接收  
 /消息示例：
 {
 "type":"UDP_MSG_READY_RECV_FILE",
+"ip":
 "filepaths":["path1","path2"]
 }
 */
@@ -343,7 +345,7 @@ long CLanSock::LanSockTCP_MSG_READY_RECV_FILE(std::vector<std::string> vec_file,
 	Json::Value Jsend_msg,Jfile_path,Jfile_name;;
 	CLanGetLocalSystemInfo m_local;
 	CString IP = m_local.getHostIP();
-	string strip = CW2A(IP.GetBuffer(IP.GetLength()));
+	string strip = CW2A(IP);
 	Jsend_msg["type"] = TCP_MSG_READY_RECV_FILE;
 	Jsend_msg["ip"] = strip;
 	for (int i = 0; i < vec_file.size() ; i++)
@@ -425,14 +427,11 @@ long CLanSock::LanSockTCP_MSG_FILE_SEND(const char*file_name,SOCKADDR_IN addr)
 		// 如果读取的字节数不大于0，说明读取出错或文件已经读取完毕
 		if (nCount <= 0)
 		{
-			//memcpy(buf,"finish",6);
 			JValue.clear();
 			JValue["type"] = TCP_MSG_SENDING_FILE;
 			JValue["buf"] = "finish";
 			sendbuf = write.write(JValue);
 			c_tcp.Send(sendbuf.c_str(), sendbuf.length());
-			//::send( sa, (const char*)buf, 6, 0 );
-			
 			OutputDebugPrintf(_T("文件发送完成......\n"));
 			break;
 		}
@@ -445,9 +444,8 @@ long CLanSock::LanSockTCP_MSG_FILE_SEND(const char*file_name,SOCKADDR_IN addr)
 		sendbuf = write.write(JValue);
 		c_tcp.Send(sendbuf.c_str(), sendbuf.length());
 		int ss = sendbuf.length();
-		
-		Sleep(20);
-		
+		OutputDebugPrintf(_T("文件发送 %d.\n"),ss);
+		Sleep(20);	
 	}
 	OutputDebugPrintf(_T("总发送大小（字节）：%d\n"), nSum);
 
@@ -492,7 +490,7 @@ long CLanSock::LanMsgSendToDlg(const int Msg_,const void* Buf)
 		}
 	case MSG_TCP_FILE_SEND:
 		{
-			SendMessage((HWND)GetInstance()->hRecvhandle,WM_MSG_TCP_FILE_SEND,(WPARAM)Buf,NULL);
+			SendMessage((HWND)GetInstance()->hMainhandle,WM_MSG_TCP_FILE_SEND,(WPARAM)Buf,NULL);
 			break;
 		}
 	case MSG_TCP_FILEINFO_RECV:

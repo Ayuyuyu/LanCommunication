@@ -47,11 +47,13 @@ BEGIN_MESSAGE_MAP(CLanCommunicationDlg, CDialogEx)
 	ON_MESSAGE(WM_MSG_UDP_CLOSE, &CLanCommunicationDlg::OnMsgUdpClose)
 	ON_MESSAGE(WM_MSG_BUTTON_SEND_FILENAME, &CLanCommunicationDlg::OnMsgButtonSendFilename)
 	ON_MESSAGE(WM_MSG_UDP_FILEINFO_SEND, &CLanCommunicationDlg::OnMsgUdpFileinfoSend)
+	ON_MESSAGE(WM_MSG_TCP_FILE_SEND, &CLanCommunicationDlg::OnMsgTcpFileSend)
 	ON_WM_DESTROY()
 	ON_WM_DROPFILES()
 	ON_WM_CTLCOLOR()
 
 	ON_NOTIFY(NM_CLICK, IDC_LIST_ONLINELIST, &CLanCommunicationDlg::OnClickListOnlinelist)
+	ON_BN_CLICKED(IDC_BUTTON2, &CLanCommunicationDlg::OnBnClickedButton2)
 END_MESSAGE_MAP()
 
 
@@ -120,7 +122,7 @@ void CLanCommunicationDlg::OnInitControls()
 	CRect rect;
 	m_listctrl_online.GetClientRect(&rect);   
 	// 为列表视图控件添加全行选中和栅格风格   
-	m_listctrl_online.SetExtendedStyle(m_listctrl_online.GetExtendedStyle() | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);  
+	m_listctrl_online.SetExtendedStyle(m_listctrl_online.GetExtendedStyle() | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES|LVS_REPORT);  
 	m_listctrl_online.InsertColumn(0, _T("UserName"), LVCFMT_CENTER, rect.Width()/3, 0);   
 	m_listctrl_online.InsertColumn(1, _T("ComputerName"), LVCFMT_CENTER, rect.Width()/3, 1);   
 	m_listctrl_online.InsertColumn(2, _T("IP"), LVCFMT_CENTER, rect.Width()/3, 2);   
@@ -143,6 +145,8 @@ void CLanCommunicationDlg::OnInitControls()
 // 发送 按钮响应
 void CLanCommunicationDlg::OnBnClickedButtonSendMsg()
 {
+	//发送消息也发送一下信息
+	CLanSock::GetInstance()->LanSockUDP_MSG_ADD_USER();
 	if (bfile)
 	{
 		CRect rc_edit;
@@ -165,6 +169,8 @@ void CLanCommunicationDlg::OnBnClickedButtonSendMsg()
 		// _tcsnccat(szMsgWrite,_T("#"),1);
 		CLanSock::GetInstance()->LanSockUDP_MSG_SEND(CW2A(szMsgWrite),strlen(CW2A(szMsgWrite)));
 	}	
+	vec_send_file = vec_file;
+	vec_file.clear();		//每次发送清空
 }
 
 void CLanCommunicationDlg::OnInitParam()
@@ -182,11 +188,12 @@ afx_msg LRESULT CLanCommunicationDlg::OnMsgUdpAddUser(WPARAM wParam, LPARAM lPar
 	udp_hostinfo* hostinfo = (udp_hostinfo*)wParam;
 	std:;string sip = inet_ntoa(hostinfo->addr.sin_addr);
 	set_iter = set_addrip.find(sip);
+	//容器中没有 插入
 	if (set_iter == set_addrip.end())
 	{
-		m_listctrl_online.InsertItem(nList, CA2W(hostinfo->szUserName));
-		m_listctrl_online.SetItemText(nList, 1,CA2W(hostinfo->szComputerName));
-		m_listctrl_online.SetItemText(nList, 2,CA2W(sip.c_str()));
+		int nIndex =m_listctrl_online.InsertItem(nList, CA2W(hostinfo->szUserName));
+		m_listctrl_online.SetItemText(nIndex, 1,CA2W(hostinfo->szComputerName));
+		m_listctrl_online.SetItemText(nIndex, 2,CA2W(sip.c_str()));
 		//插入set
 		set_addrip.insert(sip);
 	}
@@ -261,7 +268,7 @@ afx_msg LRESULT CLanCommunicationDlg::OnMsgUdpFileinfoSend(WPARAM wParam, LPARAM
 	//
 	pLanCommunicationRecvDLG->strip = Jmsg["ip"].asString();
 	//pLanCommunicationRecvDLG->strport = Jmsg["port"].asString();
-	pLanCommunicationRecvDLG->vec_filerecv = vec_file_recv;
+	pLanCommunicationRecvDLG->vec_filerecv = vec_file_recv;		//
 	//显示收到的文件名信息
 	CRect rc_edit;
 	pLanCommunicationRecvDLG->m_edit_recv_msg.GetWindowRect(&rc_edit);
@@ -275,17 +282,27 @@ afx_msg LRESULT CLanCommunicationDlg::OnMsgUdpFileinfoSend(WPARAM wParam, LPARAM
 afx_msg LRESULT CLanCommunicationDlg::OnMsgUdpClose(WPARAM wParam, LPARAM lParam)
 {	
 	char* ip = (char*)wParam;
-	int nList =m_listctrl_online.GetItemCount();
-	for (int i = 0; i < nList;i++)
+	int nListCount =m_listctrl_online.GetItemCount();
+	for (int i = 0; i < nListCount;i++)
 	{
 		TCHAR szIP[30]={0};
 		m_listctrl_online.GetItemText(i,2,szIP,30);
 		if (_stricmp(ip,CW2A(szIP)) == 0)
 		{
 			m_listctrl_online.DeleteItem(i);
+		//	m_listctrl_online.DeleteColumn(i);
 			break;
 		}
 	}
+	//清除容器中的IP
+	set_iter = set_addrip.find(ip);
+	//容器中没有 插入
+	if (set_iter != set_addrip.end())
+	{
+		set_addrip.erase(set_iter);
+	}
+	nList = nList -1;
+	
 	return 0;
 }
 
@@ -328,6 +345,7 @@ afx_msg LRESULT CLanCommunicationDlg::OnMsgButtonSendFilename(WPARAM wParam, LPA
 		m_myedit.SetWindowPos( NULL,2,260,rc_edit.right-rc_edit.left,rc_edit.bottom-rc_edit.top-20,SWP_NOZORDER );    
 		m_ButtinFileName.ShowWindow(SW_SHOW);
 		m_ButtinFileName.SetWindowPos(NULL,0,0,rc_edit.right-rc_edit.left,25,SWP_NOZORDER|SWP_NOMOVE);
+	
 		vec_file.push_back(tmp);
 
 		bfile = TRUE;
@@ -337,7 +355,42 @@ afx_msg LRESULT CLanCommunicationDlg::OnMsgButtonSendFilename(WPARAM wParam, LPA
 	return 0;
 }
 
+//发送端响应 网目的IP 发送
+// 这个响应要改   发送端没有启动这个界面 没句柄  2017-4-5
+afx_msg LRESULT CLanCommunicationDlg::OnMsgTcpFileSend(WPARAM wParam, LPARAM lParam)
+{
+	char* szip = (char*)wParam;
+	strIP = szip;		// 保存要发送到的IP
+	//SOCKET accept = (SOCKET)wParam;
+	HANDLE	hanlde = (HANDLE)_beginthreadex(NULL, 0, FileSendThread, this, 0, NULL);
 
+	return 0;
+}
+
+
+/************************************************************************/
+/*
+文件发送线程 
+vec_filerecv 保存着收到的文件信息
+依次发送
+*/
+/************************************************************************/
+unsigned int __stdcall CLanCommunicationDlg::FileSendThread(void* param)
+{
+	CLanCommunicationDlg* pthis = NULL;
+	pthis = (CLanCommunicationDlg*)param;
+	SOCKADDR_IN addr;
+	addr.sin_family			= AF_INET;
+	addr.sin_addr.s_addr	= inet_addr(pthis->strIP.c_str());		//230
+	addr.sin_port = htons(4423);
+	//遍历当前的VEC 按顺序发送
+	for (int i = 0; i < pthis->vec_send_file.size();i++)
+	{
+		CLanSock::GetInstance()->LanSockTCP_MSG_FILE_SEND(pthis->vec_send_file[i].c_str(),addr);
+	}
+	 pthis->vec_send_file.clear();
+	return 1;
+}
 
 void CLanCommunicationDlg::OnClickListOnlinelist(NMHDR *pNMHDR, LRESULT *pResult)
 {
@@ -401,4 +454,15 @@ HBRUSH CLanCommunicationDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 
 	// TODO:  如果默认的不是所需画笔，则返回另一个画笔
 	return hbr;
+}
+
+void CLanCommunicationDlg::OnBnClickedButton2()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	int nde =m_listctrl_online.InsertItem(nList,L"TEST",0);
+	m_listctrl_online.SetItemText(nde, 1,L"TEST2");
+	//m_listctrl_online.InsertItem(nList, CA2W(hostinfo->szUserName));
+	//m_listctrl_online.SetItemText(nList, 1,CA2W(hostinfo->szComputerName));
+	m_listctrl_online.SetItemText(nde, 2,L"3");
+	nList++;
 }

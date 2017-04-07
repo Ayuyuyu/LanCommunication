@@ -29,28 +29,28 @@ private:
 public:
 	long LanSockInit();
 	long LanSockGetHandle(HANDLE handleMain,HANDLE handleRecv);
-	long LanSockUDP_MSG_ADD_USER();				//程序打开 上线消息
-	long LanSockUDP_MSG_SEND(void*buf,int buf_len);
-	long LanSockUDP_MSG_CLOSE();
-	long LanSockUDP_MSG_FILEINFO_SEND(std::vector<std::string> vec_file,void*buf);
-	long LanSockTCP_MSG_READY_RECV_FILE(std::vector<std::string> vec_file,SOCKADDR_IN addr);
-	//TCP 文件发送
-	long LanSockTCP_MSG_FILE_SEND(const char*file_name,SOCKADDR_IN addr);
-	//long LanSockTCP_MSG_FILE_RECV();
+	long LanSockSelect();
+public:
+	long LanSockUDP_MSG_ADD_USER();								//程序打开 上线消息
+	long LanSockUDP_MSG_SEND(void*buf,int buf_len);		//正常UDP消息发送
+	long LanSockUDP_MSG_CLOSE();										//UDP下线消息
+	long LanSockUDP_MSG_FILEINFO_SEND(std::vector<std::string> vec_file,void*buf);		  //UDP发送文件信息  ，接受文件路径信息
+	long LanSockTCP_MSG_READY_RECV_FILE(std::vector<std::string> vec_file,SOCKADDR_IN addr);	//TCP准备接收文件
+	static long LanSockTCP_MSG_FILE_SEND(const char*file_name,SOCKADDR_IN addr);			//TCP 文件发送
 	//回调函数
 	static long LanMsgSendToDlg(const int Msg_,const void* Buf);
 
-
+protected:
 	long LanSockClose();
 	long LanSockSend(void * pBuf, unsigned int nLen);
 	long LanSockRecv(void * pBuf, unsigned int nLen);
-	long LanSockSelect();
+	void LanSockSetADDR(SOCKADDR_IN& addr);
+	//static UINT myAcceptThread(LPVOID  param);
+
 public:
 	HANDLE hMainhandle;
 	HANDLE hRecvhandle;
-protected:
-	void LanSockSetADDR(SOCKADDR_IN& addr);
-	//static UINT myAcceptThread(LPVOID  param);
+
 protected:
 	//SOCKET s_udp;
 	//SOCKET s_tcp;

@@ -1,6 +1,5 @@
 #pragma once
 #include "base_sock.h"
-
 /************************************************************************/
 /* 
 FD_READ网络事件在出现下列情况之一就被触发：
@@ -62,5 +61,8 @@ private:
 	LPSOCKET_INFORMATION SocketArray[WSA_MAXIMUM_WAIT_EVENTS];			//较为重要的结构体  保存收发信息与socket
 
 	std::vector<std::string> vvv;
+	std::string recvbuf;
+	INT64 filesize;
+	INT64 recv_filesize;
 };
 
